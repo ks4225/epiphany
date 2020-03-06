@@ -14,6 +14,7 @@
         download_script_subdir: >-
           {{ 'centos-7' if (ansible_distribution == 'CentOS' and ansible_distribution_major_version == '7') else
              'redhat-7' if (ansible_distribution == 'RedHat' and ansible_distribution_major_version == '7') else
+             'oraclelinux-7' if (ansible_distribution == 'OracleLinux' and ansible_distribution_major_version == '7') else
              'ubuntu-18.04' if (ansible_distribution == 'Ubuntu' and ansible_distribution_version == '18.04') else None }}
 
     - name: Check if OS distribution is supported
