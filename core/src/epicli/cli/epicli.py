@@ -1,4 +1,5 @@
 #!/usr/bin/env py
+import atexit
 import sys
 import argparse
 import json
@@ -15,6 +16,8 @@ from cli.helpers.Config import Config
 from cli.version import VERSION
 from cli.licenses import LICENSES
 from cli.helpers.query_yes_no import query_yes_no
+from cli.helpers.input_query import prompt_for_password
+from cli.helpers.build_saver import save_to_file
 
 
 def main():
@@ -122,10 +125,13 @@ def apply_parser(subparsers):
     sub_parser.add_argument('--no-infra', dest='no_infra', action="store_true",
                             help='Skip infrastructure provisioning.')
     sub_parser.add_argument('--offline-requirements', dest='offline_requirements', type=str,
-                            help='Path to the folder with pre-prepared offline requirements.')
+                            help='Path to the folder with pre-prepared offline requirements.')    
+    sub_parser.add_argument('--vault-password', dest='vault_password', type=str,
+                            help='Password that will be used to encrypt build artifacts.')
 
     def run_apply(args):
         adjust_paths_from_file(args)
+        ensure_vault_password_is_set(args)
         with BuildEngine(args) as engine:
             return engine.apply()
 
@@ -239,7 +245,7 @@ def adjust_paths_from_file(args):
         args.file = os.path.join(os.getcwd(), args.file)
     if not os.path.isfile(args.file):
         Config().output_dir = os.getcwd()  # Default to working dir so we can at least write logs.
-        raise Exception(f'File "{args.file}" does not excist')
+        raise Exception(f'File "{args.file}" does not exist')
     if Config().output_dir is None:
         Config().output_dir = os.path.join(os.path.dirname(args.file), 'build')
     dump_config(Config())
@@ -250,7 +256,7 @@ def adjust_paths_from_build(args):
         args.build_directory = os.path.join(os.getcwd(), args.build_directory)
     if not os.path.exists(args.build_directory):
         Config().output_dir = os.getcwd()  # Default to working dir so we can at least write logs.
-        raise Exception(f'Build directory "{args.build_directory}" does not excist')
+        raise Exception(f'Build directory "{args.build_directory}" does not exist')
     if args.build_directory[-1:] == '/':
         args.build_directory = args.build_directory.rstrip('/')
     if Config().output_dir is None:
@@ -264,6 +270,22 @@ def dump_config(config):
         if attr.startswith('_'):
             logger.info('%s = %r' % (attr[1:], getattr(config, attr)))
 
+def ensure_vault_password_is_set(args):
+    vault_password = args.vault_password 
+    if vault_password is None:
+        vault_password = prompt_for_password("Provide password to encrypt vault: ")
+
+    directory_path = os.path.dirname(Config().vault_password_location)
+    os.makedirs(directory_path, exist_ok=True)
+    save_to_file(Config().vault_password_location, vault_password)
+
+def ensure_vault_password_is_cleaned():
+    if os.path.exists(Config().vault_password_location):
+        os.remove(Config().vault_password_location)
+
+def exit_handler():
+    ensure_vault_password_is_cleaned()
 
 if __name__ == '__main__':
+    atexit.register(exit_handler)
     exit(main())

@@ -3,6 +3,14 @@ require 'base64'
 
 kube_apiserver_secure_port = 6443
 
+describe 'Waiting for all pods to be ready' do
+  describe command("for i in {1..1200}; do if [ $(kubectl get pods --all-namespaces -o json  | jq -r '.items[] | select(.status.phase != \"Running\" or ([ .status.conditions[] | select(.type == \"Ready\" and .status != \"True\") ] | length ) == 1 ) | .metadata.namespace + \"/\" + .metadata.name' | wc -l) -eq 0 ]; \
+  then echo 'READY'; break; else echo 'WAITING'; sleep 1; fi; done") do
+    its(:stdout) { should match /READY/ }
+    its(:exit_status) { should eq 0 }
+  end
+end 
+
 describe 'Checking if kubelet service is running' do
   describe service('kubelet') do
     it { should be_enabled }
@@ -28,14 +36,6 @@ describe 'Checking if kube-apiserver is running' do
   end
 end
 
-describe 'Waiting for all pods to be ready' do
-  describe command("for i in {1..1200}; do if [ $(kubectl get pods --all-namespaces -o json  | jq -r '.items[] | select(.status.phase != \"Running\" or ([ .status.conditions[] | select(.type == \"Ready\" and .status != \"True\") ] | length ) == 1 ) | .metadata.namespace + \"/\" + .metadata.name' | wc -l) -eq 0 ]; \
-  then echo 'READY'; break; else echo 'WAITING'; sleep 1; fi; done") do
-    its(:stdout) { should match /READY/ }
-    its(:exit_status) { should eq 0 }
-  end
-end 
-
 describe 'Checking if there are any pods that have status other than Running' do
   describe command('kubectl get pods --all-namespaces --field-selector=status.phase!=Running') do
     its(:stdout) { should match /^$/ }
@@ -46,7 +46,7 @@ end
 describe 'Checking if the number of master nodes is the same as indicated in the inventory file' do
   describe command('kubectl get nodes --selector=node-role.kubernetes.io/master --no-headers | wc -l | tr -d "\n"') do
     it "is expected to be equal" do
-      expect(subject.stdout.to_i).to eq count_inventory_roles("kubernetes_master")
+      expect(subject.stdout.to_i).to eq countInventoryHosts("kubernetes_master")
       end
   end
 end
@@ -54,7 +54,7 @@ end
 describe 'Checking if the number of worker nodes is the same as indicated in the inventory file' do
   describe command('kubectl get nodes --no-headers | grep -v master | wc -l | tr -d "\n"') do
     it "is expected to be equal" do
-      expect(subject.stdout.to_i).to eq count_inventory_roles("kubernetes_node")
+      expect(subject.stdout.to_i).to eq countInventoryHosts("kubernetes_node")
       end
   end
 end
