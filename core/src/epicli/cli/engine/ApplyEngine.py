@@ -86,6 +86,7 @@ class ApplyEngine(Step):
             schema_validator.run()
 
     def collect_infrastructure_config(self):
+        self.azure_login()
         with provider_class_loader(self.cluster_model.provider, 'InfrastructureConfigCollector')(
                 [*self.configuration_docs, *self.infrastructure_docs]) as config_collector:
             config_collector.run()
@@ -178,9 +179,15 @@ class ApplyEngine(Step):
             raise Exception('"existing_rg", "existing_vnet" and "existing_subnet are required to use an existing '
                             'Azure network"')
 
+        self.azure_login()
+
+        apiproxy = APIProxy(self.cluster_model, self.configuration_docs)
+        self.existing_subnet_id = apiproxy.get_existing_subnet_id(network)
+
+    def azure_login(self):
+        # TODO: Azure Login is required to query resources. Needs to be cleaned-up as this is a stripped down version from TerraformRunner.py
         apiproxy = APIProxy(self.cluster_model, self.configuration_docs)
 
-        # TODO: Azure Login is required to query resources. Needs to be cleaned-up as this is a stripped down version from TerraformRunner.py
         if not self.cluster_model.specification.cloud.use_service_principal:
             # Account
             subscription = apiproxy.login_account()
@@ -206,7 +213,6 @@ class ApplyEngine(Step):
                     self.new_env['ARM_TENANT_ID'] = sp['tenant']
                     self.new_env['ARM_CLIENT_ID'] = sp['appId']
                     self.new_env['ARM_CLIENT_SECRET'] = sp['password']
-        self.existing_subnet_id = apiproxy.get_existing_subnet_id(network)
 
     @staticmethod
     def is_provider_any(cluster_model):
